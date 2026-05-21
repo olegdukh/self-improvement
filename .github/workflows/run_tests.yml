@@ -17,7 +17,7 @@ jobs:
           curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xvz
           sudo mv hcloud /usr/local/bin/
 
-      - name: Deploy VPS
+      - name: Deploy VPS and Run Tests
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           GH_PAT: ${{ secrets.PAT_TOKEN }}
@@ -26,24 +26,26 @@ jobs:
         run: |
           chmod +x scripts/deploy_vps.sh
           ./scripts/deploy_vps.sh
-
-      - name: Wait for Runner to complete job
-        env:
-          GH_PAT: ${{ secrets.PAT_TOKEN }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
-        run: |
-          echo "Waiting for the ephemeral runner to finish the job..."
-          # Цикл очікування: перевіряємо чи є ще активні "idle" або "active" раннери з міткою self-hosted
-          for i in {1..30}; do
-            RUNNER_COUNT=$(curl -s -H "Authorization: token $GH_PAT" \
-              "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq '.runners | length')
-            
-            if [ "$RUNNER_COUNT" -eq "0" ]; then
-              echo "Runner finished and unregistered itself."
+          
+          echo "wait for runner to connect..."
+          for i in {1..60}; do
+            STATUS=$(curl -s -H "Authorization: token $GH_PAT" \
+              "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq -r '.runners[0].status // "offline"')
+            if [ "$STATUS" == "online" ]; then
+              echo "Runner connected!"
               break
             fi
-            echo "Runner still active, waiting... ($i/30)"
+            sleep 10
+          done
+          
+          echo "wait for runner to finish..."
+          while true; do
+            COUNT=$(curl -s -H "Authorization: token $GH_PAT" \
+              "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq '.runners | length')
+            if [ "$COUNT" -eq "0" ]; then 
+              echo "Runner finished and destroyed itself."
+              break 
+            fi
             sleep 10
           done
 
@@ -52,7 +54,6 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          # Видаляємо всі сервери, що починаються на gh-runner-
           SERVERS=$(hcloud server list -o json | jq -r '.[] | select(.name | startswith("gh-runner-")) | .id')
           for server_id in $SERVERS; do
             echo "Deleting server: $server_id"
