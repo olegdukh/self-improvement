@@ -7,18 +7,17 @@ on:
       - 'target_code.py'
 
 jobs:
-  deploy-runner:
+  deploy-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Hetzner Cloud CLI
+      - name: Install Hetzner CLI
         run: |
           curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xvz
           sudo mv hcloud /usr/local/bin/
 
-      - name: Deploy Self-Hosted Runner on Hetzner
+      - name: Deploy VPS
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           GH_PAT: ${{ secrets.PAT_TOKEN }}
@@ -27,3 +26,16 @@ jobs:
         run: |
           chmod +x scripts/deploy_vps.sh
           ./scripts/deploy_vps.sh
+
+      # Цей крок буде чекати на раннер, але ви можете додати логіку очікування/таймауту
+
+      - name: Cleanup VPS
+        if: always()
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+        run: |
+          # Find the last created server by name or label and delete it
+          SERVER_ID=$(hcloud server list -o json | jq -r '.[0].id')
+          if [ ! -z "$SERVER_ID" ]; then
+            hcloud server delete "$SERVER_ID"
+          fi
