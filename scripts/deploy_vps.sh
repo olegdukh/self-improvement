@@ -63,7 +63,10 @@ echo "=== Registering the runner ==="
 su - runner -c "cd /home/runner/actions-runner && ./config.sh --url https://github.com/$REPO_OWNER/$REPO_NAME --token $RUNNER_TOKEN --name $SERVER_NAME --labels self-hosted --ephemeral --unattended"
 
 echo "=== Starting task listener ==="
+# Run the listener and wait for it to exit after the ephemeral job is done
 su - runner -c "cd /home/runner/actions-runner && ./run.sh"
+
+echo "=== Runner process exited, proceeding to cleanup ==="
 EOF
 
 echo "=== 4. Launching VPS instance in Hetzner Cloud ==="
