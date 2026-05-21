@@ -1,0 +1,29 @@
+name: On-Demand Integration Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'target_code.py'
+
+jobs:
+  deploy-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Hetzner Cloud CLI
+        run: |
+          curl -sL [https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz](https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz) | tar xvz
+          sudo mv hcloud /usr/local/bin/
+
+      - name: Deploy Self-Hosted Runner on Hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          GH_PAT: ${{ secrets.PAT_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          chmod +x scripts/deploy_vps.sh
+          ./scripts/deploy_vps.sh
