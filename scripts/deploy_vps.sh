@@ -11,7 +11,6 @@ if ! hcloud firewall describe "$FIREWALL_NAME" >/dev/null 2>&1; then
 fi
 
 echo "=== 2. Requesting GitHub Runner Registration Token ==="
-# Clean API URL without any markdown brackets
 RUNNER_TOKEN=$(curl -X POST -H "Authorization: token $GH_PAT" \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners/registration-token" \
@@ -25,33 +24,52 @@ fi
 echo "=== 3. Generating dynamic Cloud-Init User Data ==="
 cat << EOF > scripts/user_data.sh
 #!/bin/bash
-set -e
+# Log all output of our initialization process to enable debugging via system logs
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+set -x
 
-# Install required stack dependencies
+echo "=== Waiting for background system updates to finish ==="
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+  echo "DPKG locked by another process, waiting 5 seconds..."
+  sleep 5
+done
+
+echo "=== Installing system dependencies ==="
 export DEBIAN_FRONTEND=noninteractive
-apt-get update && apt-get install -y curl jq docker.io git python3-pip
+apt-get update
+apt-get install -y curl jq docker.io git python3-pip python3-venv build-essential libssl-dev libffi-dev nodejs
 
-# Setup GitHub Actions Runner package
-mkdir -p /home/runner && cd /home/runner
+# Create runner user and add to docker group
+useradd -m -s /bin/bash runner || true
+usermod -aG docker runner || true
+
+echo "=== Configuring GitHub Actions Runner package ==="
+mkdir -p /home/runner/actions-runner && cd /home/runner/actions-runner
+
+# Download the official stable version of the runner
 curl -o actions-runner-linux-x64-2.316.1.tar.gz -L https://github.com/actions/runner/releases/download/v2.316.1/actions-runner-linux-x64-2.316.1.tar.gz
 tar xzf ./actions-runner-linux-x64-2.316.1.tar.gz
 
-useradd -m runner || true
+# Install system dependencies of the runner itself (required step by GitHub)
+./bin/installdependencies.sh
+
+# Change directory ownership to the newly created runner user
 chown -R runner:runner /home/runner
 
-# Register runner with --ephemeral flag (will self-remove after executing exactly 1 job)
-su - runner -c "./config.sh --url https://github.com/$REPO_OWNER/$REPO_NAME --token $RUNNER_TOKEN --name $SERVER_NAME --ephemeral --unattended"
+echo "=== Registering the runner ==="
+# Register runner under runner user (GitHub Actions prohibits running config as root)
+su - runner -c "cd /home/runner/actions-runner && ./config.sh --url https://github.com/$REPO_OWNER/$REPO_NAME --token $RUNNER_TOKEN --name $SERVER_NAME --labels self-hosted --ephemeral --unattended"
 
-# Start the listener loop. This blocks until GitHub assigns the job, executes it, and exits
-su - runner -c "./run.sh"
+echo "=== Starting task listener ==="
+# Start the runner. This process will block and wait for jobs from our workflow
+su - runner -c "cd /home/runner/actions-runner && ./run.sh"
 
-echo "=== Tests completed. Triggering self-destruction of VPS instance ==="
+echo "=== Tests completed. Triggering self-destruction of the VPS instance ==="
 SERVER_ID=\$(curl -s http://169.254.169.254/v1/meta-data/instance-id)
 curl -X DELETE -H "Authorization: Bearer $HCLOUD_TOKEN" "https://api.hetzner.cloud/v1/servers/\$SERVER_ID"
 EOF
 
-echo "=== 4. Launching VPS Instance on Hetzner Cloud ==="
-# Using universally available cx21 type to guarantee provisioning compatibility
+echo "=== 4. Launching VPS instance in Hetzner Cloud ==="
 hcloud server create \
   --name "$SERVER_NAME" \
   --image "ubuntu-22.04" \
