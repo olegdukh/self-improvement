@@ -1,13 +1,15 @@
 import os
 import sys
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
 api_key = os.getenv("LLM_API_KEY")
 if not api_key:
     print("Error: LLM_API_KEY not found in environment variables.")
     sys.exit(1)
 
-client = OpenAI(api_key=api_key)
+# Free client Gemini
+client = genai.Client(api_key=api_key)
 TARGET_FILE = "target_code.py"
 
 def main():
@@ -26,29 +28,32 @@ def main():
         "Return ONLY the clean Python code. Do not include any explanations, markdown formatting, or backticks (```)."
     )
 
-    print("Sending code to LLM for auto-improvement...")
+    print("Sending code to Google Gemini for auto-improvement...")
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Here is the current code:\n\n{current_code}"}
-            ],
-            temperature=0.6
+        # Free model gemini-2.5-flash
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=f"Here is the current code:\n\n{current_code}",
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.6,
+            ),
         )
         
-        improved_code = response.choices[0].message.content.strip()
+        improved_code = response.text.strip()
         
-        # Clean up occasional markdown block wrapping from LLM
+        # Backticks cleanup if the model included them in the response
+```python
         if improved_code.startswith("```python"):
             improved_code = improved_code.split("```python")[1].split("```")[0].strip()
         elif improved_code.startswith("```"):
-            improved_code = improved_code.split("```")[1].split("```")[0].strip()
+            improved_code = improved_code.split("
+```")[1].split("```")[0].strip()
 
         if improved_code and improved_code != current_code:
             with open(TARGET_FILE, "w", encoding="utf-8") as f:
                 f.write(improved_code)
-            print("Success: Code updated by LLM Agent.")
+            print("Success: Code updated by Gemini Agent.")
         else:
             print("No improvements made (code is identical).")
 
