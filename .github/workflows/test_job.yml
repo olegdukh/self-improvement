@@ -1,0 +1,24 @@
+name: Execute Tests on Self-Hosted Runner
+
+on:
+  workflow_run:
+    workflows: ["On-Demand Integration Tests"]
+    types:
+      - completed
+
+jobs:
+  run-tests:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Python Test Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest
+
+      - name: Run Pytest
+        run: |
+          echo "=== STARTING AUTOMATED PYTEST CHECKS INSIDE ISOLATED VPS ==="
+          python3 -m pytest tests/ -v

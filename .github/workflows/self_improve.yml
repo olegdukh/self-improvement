@@ -1,0 +1,51 @@
+name: LLM Self-Improvement Agent (PR Mode)
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  improve-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install openai
+
+      - name: Run Improvement Script
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: python scripts/improve_code.py
+
+      - name: Create Pull Request if code changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          if ! git diff --quiet target_code.py; then
+            BRANCH_NAME="llm-improvement-$(date +%s)"
+            git config --global user.name "llm-agent[bot]"
+            git config --global user.email "llm-agent@users.noreply.github.com"
+            
+            git checkout -b "$BRANCH_NAME"
+            git add target_code.py
+            git commit -m "Refactoring by LLM Agent"
+            git push origin "$BRANCH_NAME"
+            
+            gh pr create \
+              --title "🤖 AI Improvement: $(date +'%Y-%m-%d %H:%M')" \
+              --body "This PR was generated automatically by the LLM Self-Improvement Agent. Triggering Hetzner VPS deployment for automated verification." \
+              --base main \
+              --head "$BRANCH_NAME"
+          else
+            echo "No changes detected."
+          fi

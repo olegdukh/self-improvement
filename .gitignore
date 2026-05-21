@@ -1,0 +1,15 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Test automation caching
+.pytest_cache/
+.phpunit.result.cache
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Generated deployment artifacts containing tokens
+scripts/user_data.sh
