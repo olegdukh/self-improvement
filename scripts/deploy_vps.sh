@@ -55,6 +55,6 @@ echo "=== 4. Launching VPS Instance on Hetzner Cloud ==="
 hcloud server create \
   --name "$SERVER_NAME" \
   --image "ubuntu-22.04" \
-  --type "cx21" \
+  --type "cx23" \
   --firewall "$FIREWALL_NAME" \
   --user-data-from-file scripts/user_data.sh
