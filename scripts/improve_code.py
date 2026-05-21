@@ -8,7 +8,6 @@ if not api_key:
     print("Error: LLM_API_KEY not found in environment variables.")
     sys.exit(1)
 
-# Free client Gemini
 client = genai.Client(api_key=api_key)
 TARGET_FILE = "target_code.py"
 
@@ -25,12 +24,11 @@ def main():
         "You can: optimize algorithms, add type hinting, add docstrings, and handle exceptions.\n"
         "⚠️ CRITICAL RULE: You are strictly forbidden to change the function name 'calculate' or its argument count. "
         "The function must accept two arguments and return their sum. If you break this logic, the automated tests will fail!\n"
-        "Return ONLY the clean Python code. Do not include any explanations, markdown formatting, or backticks (```)."
+        "Return ONLY the clean Python code. Do not include any explanations, markdown formatting, or backticks."
     )
 
     print("Sending code to Google Gemini for auto-improvement...")
     try:
-        # Free model gemini-2.5-flash
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=f"Here is the current code:\n\n{current_code}",
@@ -42,13 +40,17 @@ def main():
         
         improved_code = response.text.strip()
         
-        # Backticks cleanup if the model included them in the response
-```python
-        if improved_code.startswith("```python"):
-            improved_code = improved_code.split("```python")[1].split("```")[0].strip()
-        elif improved_code.startswith("```"):
-            improved_code = improved_code.split("
-```")[1].split("```")[0].strip()
+        backticks = '`' * 3
+        if improved_code.startswith(backticks + "python"):
+            improved_code = improved_code[9:]
+            if improved_code.endswith(backticks):
+                improved_code = improved_code[:-3]
+        elif improved_code.startswith(backticks):
+            improved_code = improved_code[3:]
+            if improved_code.endswith(backticks):
+                improved_code = improved_code[:-3]
+                
+        improved_code = improved_code.strip()
 
         if improved_code and improved_code != current_code:
             with open(TARGET_FILE, "w", encoding="utf-8") as f:
