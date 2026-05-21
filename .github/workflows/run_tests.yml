@@ -15,7 +15,7 @@ jobs:
 
       - name: Install Hetzner Cloud CLI
         run: |
-          curl -sL [https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz](https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz) | tar xvz
+          curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xvz
           sudo mv hcloud /usr/local/bin/
 
       - name: Deploy Self-Hosted Runner on Hetzner
