@@ -28,14 +28,15 @@ jobs:
           ./scripts/deploy_vps.sh
           
           echo "Очікування підключення раннера до GitHub..."
-          for i in {1..60}; do
+          for i in {1..40}; do
             STATUS=$(curl -s -H "Authorization: token $GH_PAT" \
               "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq -r '.runners[0].status // "offline"')
             if [ "$STATUS" == "online" ]; then
-              echo "Раннер онлайн!"
+              echo "Раннер успішно підключився!"
               break
             fi
-            sleep 10
+            sleep 15
+            if [ $i -eq 40 ]; then echo "Timeout: Раннер не підключився вчасно."; exit 1; fi
           done
 
       - name: Wait for Runner completion
@@ -44,12 +45,12 @@ jobs:
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
         run: |
-          echo "Очікування виконання завдань раннером..."
+          echo "Очікування виконання роботи раннером..."
           while true; do
             COUNT=$(curl -s -H "Authorization: token $GH_PAT" \
               "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq '.runners | length')
             if [ "$COUNT" -eq "0" ]; then 
-              echo "Раннер виконав роботу і вимкнувся."
+              echo "Раннер завершив роботу."
               break 
             fi
             sleep 10
@@ -60,9 +61,8 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          # Видаляємо всі сервери, що починаються з префікса
           SERVERS=$(hcloud server list -o json | jq -r '.[] | select(.name | startswith("gh-runner-")) | .id')
           for server_id in $SERVERS; do
-            echo "Примусове видалення сервера: $server_id"
+            echo "Видалення сервера: $server_id"
             hcloud server delete "$server_id" || true
           done
