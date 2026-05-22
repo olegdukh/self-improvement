@@ -17,7 +17,7 @@ jobs:
           curl -sL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz | tar xvz
           sudo mv hcloud /usr/local/bin/
 
-      - name: Deploy VPS and Run Tests
+      - name: Deploy VPS
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           GH_PAT: ${{ secrets.PAT_TOKEN }}
@@ -27,23 +27,29 @@ jobs:
           chmod +x scripts/deploy_vps.sh
           ./scripts/deploy_vps.sh
           
-          echo "wait for runner to connect..."
+          echo "Очікування підключення раннера до GitHub..."
           for i in {1..60}; do
             STATUS=$(curl -s -H "Authorization: token $GH_PAT" \
               "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq -r '.runners[0].status // "offline"')
             if [ "$STATUS" == "online" ]; then
-              echo "Runner connected!"
+              echo "Раннер онлайн!"
               break
             fi
             sleep 10
           done
-          
-          echo "wait for runner to finish..."
+
+      - name: Wait for Runner completion
+        env:
+          GH_PAT: ${{ secrets.PAT_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          echo "Очікування виконання завдань раннером..."
           while true; do
             COUNT=$(curl -s -H "Authorization: token $GH_PAT" \
               "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/actions/runners" | jq '.runners | length')
             if [ "$COUNT" -eq "0" ]; then 
-              echo "Runner finished and destroyed itself."
+              echo "Раннер виконав роботу і вимкнувся."
               break 
             fi
             sleep 10
@@ -54,8 +60,9 @@ jobs:
         env:
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
+          # Видаляємо всі сервери, що починаються з префікса
           SERVERS=$(hcloud server list -o json | jq -r '.[] | select(.name | startswith("gh-runner-")) | .id')
           for server_id in $SERVERS; do
-            echo "Deleting server: $server_id"
-            hcloud server delete "$server_id"
+            echo "Примусове видалення сервера: $server_id"
+            hcloud server delete "$server_id" || true
           done
